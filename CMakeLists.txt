@@ -9,6 +9,7 @@ add_executable(osfetch
     src/system.cpp
     src/render.cpp
     src/logo.cpp
+    src/pci.cpp
 )
 
 target_include_directories(osfetch PRIVATE src)

@@ -1,4 +1,5 @@
 #include "system.hpp"
+#include "pci.hpp"
 
 #include <sys/ioctl.h>
 #include <sys/statvfs.h>
@@ -14,6 +15,35 @@
 #include <string>
 #include <filesystem>
 #include <algorithm>
+
+#include <chrono>
+#include <iostream>
+
+template <typename F>
+auto measure_ms(const char* name, F&& fn) {
+    auto start = std::chrono::steady_clock::now();
+    auto result = fn();
+    auto end = std::chrono::steady_clock::now();
+
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cerr << "[osfetch] " << name << ": " << ms << " ms\n";
+    return result;
+}
+
+std::string trim(std::string s) {
+    s.erase(0, s.find_first_not_of(" \t\r\n"));
+    s.erase(s.find_last_not_of(" \t\r\n") + 1);
+    return s;
+}
+
+std::string read_first_line(const std::string& path) {
+    std::ifstream file(path);
+    if (!file) return "";
+
+    std::string line;
+    std::getline(file, line);
+    return trim(line);
+}
 
 std::string get_user() {
     const char* user = std::getenv("USER");
@@ -261,53 +291,62 @@ std::string get_cpu() {
 }
 
 std::vector<std::string> get_gpus() {
+    namespace fs = std::filesystem;
+
     std::vector<std::string> result;
+    const fs::path drm_path("/sys/class/drm");
 
-    std::string output = exec_command("lspci 2>/dev/null");
-    if (output.empty()) return result;
-
-    std::istringstream iss(output);
-    std::string line;
-
-    while (std::getline(iss, line)) {
-        if (line.find("VGA compatible controller:") == std::string::npos &&
-            line.find("3D controller:") == std::string::npos &&
-            line.find("Display controller:") == std::string::npos) {
-            continue;
+    try {
+        if (!fs::exists(drm_path) || !fs::is_directory(drm_path)) {
+            return result;
         }
 
-        auto pos = line.find(": ");
-        if (pos == std::string::npos) continue;
+        for (const auto& entry : fs::directory_iterator(drm_path)) {
+            const std::string name = entry.path().filename().string();
 
-        std::string value = line.substr(pos + 2);
+            if (name.rfind("card", 0) != 0) continue;
+            if (name.find('-') != std::string::npos) continue;
 
-        auto vendor_prefixes = {
-            std::string("NVIDIA Corporation "),
-            std::string("Intel Corporation "),
-            std::string("Advanced Micro Devices, Inc. "),
-            std::string("AMD/ATI ")
-        };
+            const fs::path device_path = entry.path() / "device";
+            if (!fs::exists(device_path)) continue;
 
-        for (const auto& prefix : vendor_prefixes) {
-            if (value.rfind(prefix, 0) == 0) {
-                value = value.substr(prefix.size());
-                break;
+            const std::string vendor = read_first_line((device_path / "vendor").string());
+            const std::string device = read_first_line((device_path / "device").string());
+
+            if (vendor.empty() || device.empty()) continue;
+
+            const auto pci_name = lookup_pci_name(vendor, device);
+
+            if (pci_name.found) {
+                std::string pretty = pci_name.device_name;
+
+                if (pretty.empty()) {
+                    pretty = pci_name.vendor_name + " GPU";
+                }
+
+                result.push_back(pretty);
+            } else {
+                std::string label;
+
+                if (vendor == "0x8086") {
+                    label = "Intel GPU";
+                } else if (vendor == "0x10de") {
+                    label = "NVIDIA GPU";
+                } else if (vendor == "0x1002") {
+                    label = "AMD GPU";
+                } else {
+                    label = "Unknown GPU";
+                }
+
+                label += " (" + device + ")";
+                result.push_back(label);
             }
         }
-
-        result.push_back(value);
+    } catch (...) {
+        return result;
     }
 
     return result;
-}
-
-std::string read_first_line(const std::string& path) {
-    std::ifstream file(path);
-    if (!file) return "";
-
-    std::string line;
-    std::getline(file, line);
-    return line;
 }
 
 std::string get_battery() {
@@ -341,22 +380,24 @@ std::string get_battery() {
 }
 
 SystemInfo collect_system_info() {
-    return {
-        get_user(),
-        get_hostname_str(),
-        get_shell(),
-        get_terminal(),
-        get_wm(),
-        get_kernel(),
-        get_os_pretty_name(),
-        get_uptime(),
-        get_packages(),
-        get_cpu(),
-        get_gpus(),
-        get_ram(),
-        get_disk(),
-        get_battery()
-    };
+    SystemInfo info;
+
+    info.user      = get_user();
+    info.hostname  = get_hostname_str();
+    info.shell     = get_shell();
+    info.terminal  = get_terminal();
+    info.wm        = get_wm();
+    info.kernel    = get_kernel();
+    info.os        = get_os_pretty_name();
+    info.uptime    = get_uptime();
+    info.packages  = get_packages();
+    info.gpus      = get_gpus();
+    info.cpu       = get_cpu();
+    info.ram       = get_ram();
+    info.disk      = get_disk();
+    info.battery   = get_battery();
+
+    return info;
 }
 
 int get_terminal_width() {
