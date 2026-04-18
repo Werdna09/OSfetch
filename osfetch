@@ -1,0 +1,82 @@
+#!/bin/bash
+
+ACCENT=$'\e[38;2;226;140;140m'
+BLUE=$'\e[38;2;164;185;239m'
+GREEN=$'\e[38;2;179;225;163m'
+YELLOW=$'\e[38;2;234;221;160m'
+PINK=$'\e[38;2;240;175;225m'
+FG=$'\e[38;2;215;218;224m'
+MUTED=$'\e[38;2;110;108;124m'
+RESET=$'\e[0m'
+BOLD=$'\e[1m'
+
+user=$(whoami)
+host=$(uname -n)
+user_host="${user}@${host}"
+
+os=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2- | tr -d '""')
+kernel=$(uname -r)
+uptime=$(uptime -p | sed 's/^up //')
+shell=$(basename "$SHELL")
+pack=$(pacman -Qq | wc -l)
+
+wm="bspwm"
+term="alacritty"
+
+cpu=$(awk -F: '/model name/ {print $2; exit}' /proc/cpuinfo | xargs)
+ram=$(free -h | awk '/Mem:/ {print $3 " / " $2}')
+gpu=$(lspci | grep -iE 'VGA|3D' | grep -i 'NVIDIA' | sed -E 's/.*\[(.*)\].*/\1/')
+disk=$(df -h / | awk 'NR==2 {print $3 " / " $2}')
+
+box_line() {
+    local color="$1"
+    local label="$2"
+    local value="$3"
+
+    printf "%b┃%b  %b██%b %b%b%-10s%b %s\n" \
+        "$MUTED" "$RESET" \
+        "$color" "$RESET" \
+        "$FG" "$BOLD" "$label:" "$RESET" \
+        "$value"
+}
+
+print_top() {
+    printf "%b┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓%b\n" "$MUTED" "$RESET"
+}
+
+print_bot() {
+    printf "%b┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛%b\n" "$MUTED" "$RESET"
+}
+
+color_blocks() {
+    printf "\n"
+    printf "   "
+    printf "${ACCENT}███${RESET} "
+    printf "${BLUE}███${RESET} "
+    printf "${GREEN}███${RESET} "
+    printf "${YELLOW}███${RESET} "
+    printf "${PINK}███${RESET} "
+    printf "${FG}███${RESET}\n"
+}
+
+echo
+printf "%b%s%b\n" "$ACCENT" "$user_host" "$RESET"
+echo
+print_top
+box_line "$ACCENT"  "OS"        "$os"
+box_line "$BLUE"    "Kernel"    "$kernel"
+box_line "$GREEN"   "Uptime"    "$uptime"
+box_line "$YELLOW"  "Shell"     "$shell"
+box_line "$PINK"    "WM"        "$wm"
+box_line "$BLUE"    "Terminal"  "$term"
+box_line "$GREEN"   "Packages"  "$pack"
+print_bot
+
+print_top
+box_line "$YELLOW"   "CPU"       "$cpu"
+box_line "$PINK"  "GPU"       "$gpu"
+box_line "$BLUE"    "RAM"       "$ram"
+box_line "$GREEN"    "Disk"      "$disk"
+print_bot
+color_blocks
+echo
