@@ -10,11 +10,13 @@ MUTED=$'\e[38;2;110;108;124m'
 RESET=$'\e[0m'
 BOLD=$'\e[1m'
 
+LOGO_FILE="$HOME/.config/scripts/fetch/assets/logo.txt"
+
 user=$(whoami)
 host=$(uname -n)
 user_host="${user}@${host}"
 
-os=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2- | tr -d '""')
+os=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2- | tr -d '"')
 kernel=$(uname -r)
 uptime=$(uptime -p | sed 's/^up //')
 shell=$(basename "$SHELL")
@@ -28,10 +30,38 @@ ram=$(free -h | awk '/Mem:/ {print $3 " / " $2}')
 gpu=$(lspci | grep -iE 'VGA|3D' | grep -i 'NVIDIA' | sed -E 's/.*\[(.*)\].*/\1/')
 disk=$(df -h / | awk 'NR==2 {print $3 " / " $2}')
 
+mapfile -t logo < "$LOGO_FILE"
+
+logo_colors=(
+"$BLUE"
+"$PINK"
+"$GREEN"
+"$YELLOW"
+"$ACCENT"
+"$BLUE"
+"$PINK"
+"$GREEN"
+)
+
+truncate_text() {
+    local text="$1"
+    local max="$2"
+
+    if (( max <= 0 )); then
+        printf ''
+    elif (( ${#text} > max )) && (( max > 3 )); then
+        printf '%s...' "${text:0:$((max - 3))}"
+    else
+        printf '%s' "$text"
+    fi
+}
+
 box_line() {
     local color="$1"
     local label="$2"
     local value="$3"
+
+    value="$(truncate_text "$value" "$box_value_width")"
 
     printf "%b┃%b  %b██%b %b%b%-10s%b %s\n" \
         "$MUTED" "$RESET" \
@@ -48,35 +78,66 @@ print_bot() {
     printf "%b┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛%b\n" "$MUTED" "$RESET"
 }
 
-color_blocks() {
-    printf "\n"
-    printf "   "
-    printf "${ACCENT}███${RESET} "
-    printf "${BLUE}███${RESET} "
-    printf "${GREEN}███${RESET} "
-    printf "${YELLOW}███${RESET} "
-    printf "${PINK}███${RESET} "
-    printf "${FG}███${RESET}\n"
+color_blocks_line() {
+    printf "   ${ACCENT}███${RESET} ${BLUE}███${RESET} ${GREEN}███${RESET} ${YELLOW}███${RESET} ${PINK}███${RESET} ${FG}███${RESET}"
 }
 
-echo
-printf "%b%s%b\n" "$ACCENT" "$user_host" "$RESET"
-echo
-print_top
-box_line "$ACCENT"  "OS"        "$os"
-box_line "$BLUE"    "Kernel"    "$kernel"
-box_line "$GREEN"   "Uptime"    "$uptime"
-box_line "$YELLOW"  "Shell"     "$shell"
-box_line "$PINK"    "WM"        "$wm"
-box_line "$BLUE"    "Terminal"  "$term"
-box_line "$GREEN"   "Packages"  "$pack"
-print_bot
+logo_width=20
+gap=4
+logo_pad_top=4
 
-print_top
-box_line "$YELLOW"   "CPU"       "$cpu"
-box_line "$PINK"  "GPU"       "$gpu"
-box_line "$BLUE"    "RAM"       "$ram"
-box_line "$GREEN"    "Disk"      "$disk"
-print_bot
-color_blocks
+term_width=$(tput cols)
+right_width=$((term_width - logo_width - gap))
+box_value_width=$((right_width - 18))
+
+if (( box_value_width < 4 )); then
+    box_value_width=4
+fi
+
+info=(
+""
+"$(printf "%b%b%s%b" "$ACCENT" "$BOLD" "$user_host" "$RESET")"
+""
+"$(print_top)"
+"$(box_line "$ACCENT" "OS"       "$os")"
+"$(box_line "$BLUE"   "Kernel"   "$kernel")"
+"$(box_line "$GREEN"  "Uptime"   "$uptime")"
+"$(box_line "$YELLOW" "Shell"    "$shell")"
+"$(box_line "$PINK"   "WM"       "$wm")"
+"$(box_line "$BLUE"   "Terminal" "$term")"
+"$(box_line "$GREEN"  "Packages" "$pack")"
+"$(print_bot)"
+"$(print_top)"
+"$(box_line "$YELLOW" "CPU"      "$cpu")"
+"$(box_line "$PINK"   "GPU"      "$gpu")"
+"$(box_line "$BLUE"   "RAM"      "$ram")"
+"$(box_line "$GREEN"  "Disk"     "$disk")"
+"$(print_bot)"
+""
+"$(color_blocks_line)"
+)
+
+rows=${#info[@]}
+if [ $(( ${#logo[@]} + logo_pad_top )) -gt "$rows" ]; then
+    rows=$(( ${#logo[@]} + logo_pad_top ))
+fi
+
+echo
+for ((i=0; i<rows; i++)); do
+    logo_index=$((i - logo_pad_top))
+
+    if (( logo_index >= 0 && logo_index < ${#logo[@]} )); then
+        left="${logo[$logo_index]}"
+        color="${logo_colors[$logo_index]}"
+    else
+        left=""
+        color="$FG"
+    fi
+
+    right="${info[$i]}"
+
+    printf "%b%-${logo_width}s%b%*s%b\n" \
+        "${color:-$FG}" "${left:-}" "$RESET" \
+        "$gap" "" "${right:-}"
+done
 echo
