@@ -11,3 +11,7 @@ Custom system fetch script for Arch Linux.
 ## Usage
 ```bash
 osfetch
+```
+
+## Preview
+![osfetch preview] (assets/osfetch.png)
