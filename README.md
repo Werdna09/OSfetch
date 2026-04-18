@@ -14,4 +14,4 @@ osfetch
 ```
 
 ## Preview
-![osfetch preview] (assets/osfetch.png)
+![osfetch preview](assets/osfetch.png)
