@@ -1,4 +1,5 @@
 #pragma once
+
 #include <string>
 #include <vector>
 #include "system.hpp"
@@ -26,6 +27,9 @@ std::string box_line(const std::string& color,
                      const std::string& value,
                      std::size_t value_width);
 
-std::vector<std::string> build_info_lines(const SystemInfo& sys, int box_width, std::size_t value_width);
+std::vector<std::string> build_info_lines(const SystemInfo& sys,
+                                          int box_width,
+                                          std::size_t value_width);
 
 void render_fetch(const std::vector<std::string>& logo, const SystemInfo& sys);
+void render_fetch_animated(const std::vector<std::string>& logo, const SystemInfo& sys);
